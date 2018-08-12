@@ -13,6 +13,8 @@ import torch.nn.functional as F
 import torchvision
 import torchvision.transforms as T
 
+from model import Model
+
 
 # init game environment
 env = gym.make('SpaceInvaders-v0')
@@ -25,36 +27,12 @@ SEQ = 100
 CHANNELS = 3
 HEIGHT = 224
 WIDTH = 224
-RNN_HIDDEN = 256
 OUTPUTS = env.action_space.n
 
+cuda = torch.device('cuda')
 
-class Model(nn.Module):
-
-    def __init__(self, batch):
-        super(Model, self).__init__()
-        self.conv = torchvision.models.squeezenet1_1(pretrained=True)
-        self.rnn = nn.LSTM(1006, RNN_HIDDEN, num_layers=3, batch_first=True, dropout=0.3)
-        self.fc = nn.Linear(256, env.action_space.n)
-        self.batch = batch
-        self.reset()
-    
-    def forward(self, x, action):
-        batch = x.size(0)
-        seq = x.size(1)
-        x = x.view(-1, CHANNELS, HEIGHT, WIDTH)
-        x = self.conv(x).detach()  # just use pretrained embedding
-        x = x.view(batch, seq, -1)
-        x = torch.cat([x, action], 2)
-        x, self.h = self.rnn(x, (self.h[0].detach(), self.h[1].detach()))
-        return F.relu(self.fc(x))
-
-    def reset(self):
-        self.h = (torch.zeros(3, self.batch, RNN_HIDDEN), 
-                  torch.zeros(3, self.batch, RNN_HIDDEN))
-
-model_train = Model(BATCH)
-model_eval = Model(1)
+model_train = Model(BATCH).cuda()
+model_eval = Model(1).cuda()
 model_eval.load_state_dict(model_train.state_dict())
 
 resize = T.Compose([T.ToPILImage(),
@@ -65,7 +43,7 @@ def get_screen():
     screen = env.render(mode='rgb_array').transpose(
         (2, 0, 1))  # transpose into torch order (CHW)
     screen = np.ascontiguousarray(screen, dtype=np.float32) / 255
-    screen = torch.from_numpy(screen)
+    screen = torch.from_numpy(screen).cuda()
     screen = resize(screen).unsqueeze(0)
     return screen
 
@@ -84,9 +62,9 @@ def get_action(step, screen, action):
 
 
 def get_seq(step):
-    x = torch.zeros(BATCH, SEQ, 3, 224, 224)
-    y = torch.zeros(BATCH, SEQ, 6) 
-    actions = torch.zeros(BATCH, SEQ, 6)
+    x = torch.zeros(BATCH, SEQ, 3, 224, 224).cuda()
+    y = torch.zeros(BATCH, SEQ, 6).cuda()
+    actions = torch.zeros(BATCH, SEQ, 6).cuda()
     env.reset()
     action = 0
     for i in range(BATCH):
