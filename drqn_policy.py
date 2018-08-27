@@ -3,7 +3,7 @@ import random
 # Epsilon decay
 E_start     = 1.0
 E_end       = 0.1
-E_steps     = 10_000
+E_steps     = 2000
 
 def random_action():
     return random.randint(0, 5)

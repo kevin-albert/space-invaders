@@ -31,7 +31,7 @@ trace       = 20            # playback sequence depth - 1 second
 load_every  = 5             # every n episodes, update target net
 print_every = 1             # every n episodes, print out progress
 save_every  = 10            # every n episodes, save checkpoint
-init_steps  = 100           # Build up replay memory before training
+init_steps  = 20            # Build up replay memory before training
 
 # Initialize models
 device      = torch.device('cpu')
@@ -89,11 +89,11 @@ def train_batch(episode):
     depth = int(trace/2)
     pred = pred[:, -depth:].squeeze()
     pred_target = pred_target[:, -depth:]
-    t = t[-depth:]
     r = r[:, -depth:]
 
     # Compute r + (gamma)Q(s, a{t+1})
     not_t = 1 - t.type(torch.float32)
+
     target = r + gamma * pred_target[:, -1] * not_t.reshape(batch, 1)
 
     # Calculate loss and backpropagate
@@ -124,6 +124,8 @@ def play_episode(episode):
         Q_action = p.argmax().item()
         a = drqn_policy.epsilon_greedy(episode, Q_action)
         r, done = env.step(a)
+        a = torch.tensor(a, dtype=torch.int32).to(device)
+        r = torch.tensor(r).to(device)
         seq.append((S, a, r))
         score += r
         if done:
@@ -146,7 +148,7 @@ def train(episode):
 
     if episode % print_every == 0:
         # Print current progress
-        total_time = timedelta(seconds=total_frames / 60) 
+        total_time = timedelta(seconds=int(total_frames / 60))
         print('{}| episode={} loss={:<3.5f} Q={:<3.5f} score={:<5}'.format(
             total_time, episode, losses[episode], Q_avg[episode], \
             scores[episode]))
@@ -165,8 +167,12 @@ def save(episode, filename):
 
 print('Initializing replay memory')
 init_replay_mem()
+
 print('Training')
-map(train, range(episodes))
+for episode in range(episodes):
+    train(episode)
+
 print('Saving final model')
 save(episodes, './drqn_final')
+
 print('Done')

@@ -1,8 +1,7 @@
 import torch
 import random
 
-# Storing 1x84x84 images plus actions and rewards should take ip just under
-# 2GB or GPU ram.
+# 1K episode replay memory
 N = 1_000
 
 class ReplayMem:
