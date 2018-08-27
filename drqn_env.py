@@ -53,3 +53,6 @@ class SpaceInvaders:
         
     def action_space(self):
         return 6
+
+    def close(self):
+        self.env.close()

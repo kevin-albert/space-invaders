@@ -1,6 +1,7 @@
 import time
 from datetime import timedelta
 from itertools import count
+import os
 import numpy as np
 
 import torch
@@ -28,13 +29,19 @@ k           = 3
 episodes    = 100_000       # total episodes to play
 batch       = 32            # minibatch size
 trace       = 20            # playback sequence depth - 1 second
-load_every  = 5             # every n episodes, update target net
+load_every  = 1             # every n episodes, update target net
 print_every = 1             # every n episodes, print out progress
-save_every  = 10            # every n episodes, save checkpoint
+save_every  = 5             # every n episodes, save checkpoint
 init_steps  = 20            # Build up replay memory before training
 
 # Initialize models
-device      = torch.device('cuda')
+if torch.cuda.is_available():
+    device  = torch.device('cuda')
+    print('CUDA detected - using GPU')
+else:
+    device  = torch.device('cpu')
+    print('CUDA not detected - using CPU')
+
 policy_net  = DRQNModel(mode='Train').to(device)
 target_net  = DRQNModel(mode='Eval').to(device)
 target_net.load_state_dict(policy_net.state_dict())
@@ -131,6 +138,7 @@ def play_episode(episode):
             break
 
     p_sum /= t
+    # sanity check
     #print('p avg: [ ', end='')
     #for i in range(6):
     #    print('{:2.5f} '.format(p_sum[i].item()), end='')
@@ -157,33 +165,82 @@ def train(episode):
         
     if episode % save_every == 0:
         # Save state
-        save(episode, './drqn_checkpoint')
-
+        save(episode, './checkpoints/spaceguy')
 
 def save(episode, filename):
+    global total_frames
     torch.save({
         'episode': episode,
         'model': policy_net.state_dict(),
         'mem': mem.state_dict(),
+        'total_frames': total_frames
     }, filename)
 
 def load(filename):
+    global total_frames
+
     state = torch.load(filename)
     policy_net.load_state_dict(state['model'])
     target_net.load_state_dict(state['model'])
     mem.load_state_dict(state['mem'])
+    if 'total_frames' in state:
+        total_frames = state['total_frames']
+    else:
+        total_frames = 0
+
     return state['episode']
 
+def free_play(games=1):
+    env.reset()
+    target_net.reset_state()
+    t_frame = 1/60
+    a = 0
+    score = 0
+    games_played = 0
+    for t in count():
+        t0 = time.time()
+        env.render()
+        S = env.get_state()
+        if t % k == 0:
+            # Execute the policy and take a new action
+            p = target_net(S).squeeze()
+            a = p.argmax().item()
+        r, done = env.step(a)
+        score += r
+        if done:
+            print('score = {}'.format(score))
+            score = 0
+            env.reset()
+            target_net.reset_state()
+            time.sleep(1)
+            games_played += 1
+            if games_played >= games:
+                return
+        else:
+            t_diff = t_frame - (time.time() - t0)
+            if t_diff > 0:
+                time.sleep(t_diff)
 
-#print('Initializing replay memory')
-#init_replay_mem()
 
+if os.path.exists('./checkpoints/spaceguy'):
+    print('Loading from checkpoint')
+    ep_start = load('./checkpoints/spaceguy')
+else:
+    print('Initializing replay memory')
+    init_replay_mem()
+    ep_start = 0
+
+print('Replay memory size: {}MB'.format(mem.size/1024/1024))
 print('Training')
-ep_start = load('./drqn_checkpoint')
+
 for episode in range(ep_start, episodes):
     train(episode)
 
 print('Saving final model')
-save(episodes, './drqn_final')
+save(episodes, './checkpoints/spaceguy_final')
+
+print('Free play...')
+free_play(10)
+env.close()
 
 print('Done')
