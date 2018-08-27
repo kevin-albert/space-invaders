@@ -111,10 +111,12 @@ def play_episode(episode):
 
     Q_sum = 0
     score = 0
+    p_sum = torch.zeros(6).to(device)
 
     for t in count():
         S = env.get_state().to(device)
         p = target_net(S).squeeze()
+        p_sum += p.detach()
         Q_sum += p.max(0)[0]
         Q_action = p.argmax().item()
         a = drqn_policy.epsilon_greedy(episode, Q_action)
@@ -128,6 +130,11 @@ def play_episode(episode):
             mem.store(S, a, r)
             break
 
+    p_sum /= t
+    #print('p avg: [ ', end='')
+    #for i in range(6):
+    #    print('{:2.5f} '.format(p_sum[i].item()), end='')
+    #print(']', end='')
     Q_avg[episode] = Q_sum / t
     scores[episode] = score
     total_frames += t * k
@@ -144,7 +151,7 @@ def train(episode):
     if episode % print_every == 0:
         # Print current progress
         total_time = timedelta(seconds=int(total_frames / 60))
-        print('{}| episode={} loss={:<3.5f} Q={:<3.5f} score={:<5}'.format(
+        print('| {} | episode={} loss={:<3.5f} Q={:<3.5f} score={:<5}'.format(
             total_time, episode, losses[episode], Q_avg[episode], \
             scores[episode]))
         
@@ -160,11 +167,20 @@ def save(episode, filename):
         'mem': mem.state_dict(),
     }, filename)
 
-print('Initializing replay memory')
-init_replay_mem()
+def load(filename):
+    state = torch.load(filename)
+    policy_net.load_state_dict(state['model'])
+    target_net.load_state_dict(state['model'])
+    mem.load_state_dict(state['mem'])
+    return state['episode']
+
+
+#print('Initializing replay memory')
+#init_replay_mem()
 
 print('Training')
-for episode in range(episodes):
+ep_start = load('./drqn_checkpoint')
+for episode in range(ep_start, episodes):
     train(episode)
 
 print('Saving final model')

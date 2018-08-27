@@ -1,8 +1,8 @@
 import torch
 import random
 
-# 1K episode replay memory
-N = 1_000
+# 100 episode replay memory
+N = 100
 
 class ReplayMem:
 
