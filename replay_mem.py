@@ -41,7 +41,7 @@ class ReplayMem:
         if S.shape[0] > self.maxlen:
             self.maxlen = S.shape[0]
     
-    def sample(self, D, L):
+    def sample(self, D, L, device):
         """
         Sample batch of (state, action, reward, done) sequences
         params:
@@ -57,10 +57,10 @@ class ReplayMem:
         if L > self.maxlen:
             raise RuntimeError('No sequence of length {} available'.format(L))
 
-        S = torch.zeros(D, L, 1, 84, 84)
-        a = torch.zeros(D, L, 1, dtype=torch.int64)
-        r = torch.zeros(D, L)
-        t = torch.zeros(D, dtype=torch.uint8)
+        S = torch.zeros(D, L, 1, 84, 84).to(device)
+        a = torch.zeros(D, L, 1, dtype=torch.int64).to(device)
+        r = torch.zeros(D, L).to(device)
+        t = torch.zeros(D, dtype=torch.uint8).to(device)
 
         for i in range(D):
             while True:

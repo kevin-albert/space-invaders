@@ -34,7 +34,7 @@ save_every  = 10            # every n episodes, save checkpoint
 init_steps  = 20            # Build up replay memory before training
 
 # Initialize models
-device      = torch.device('cpu')
+device      = torch.device('cuda')
 policy_net  = DRQNModel(mode='Train').to(device)
 target_net  = DRQNModel(mode='Eval').to(device)
 target_net.load_state_dict(policy_net.state_dict())
@@ -73,13 +73,11 @@ def init_replay_mem():
 
 
 def train_batch(episode):
-    global total_frames
-
     policy_net.reset_state()
     target_net.reset_state()
 
     # Sample from replay memory
-    (S, a, r, t) = mem.sample(batch, trace)
+    (S, a, r, t) = mem.sample(batch, trace, device)
     
     # Evaluate training batch
     pred = policy_net(S[:, :-1]).gather(2, a[:, :-1])
@@ -102,9 +100,6 @@ def train_batch(episode):
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
-    
-    # Running total of frames played
-    total_frames += batch * trace * k
 
 
 def play_episode(episode):
